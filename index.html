@@ -39,6 +39,7 @@
     font-size:16px; font-weight:700; font-family:'Rubik'; color:#14213D; background:#F8F9FD;
     outline:none; box-sizing:border-box; margin-bottom:10px; transition:border-color .15s;
   }
+  .la-num-input { direction:ltr; text-align:right; }
   .la-num-input:focus { border-color:#2A4BD6; }
   input[type=range] {
     -webkit-appearance:none; width:100%; height:6px; border-radius:6px; background:#E2E7F3; outline:none;
@@ -468,17 +469,17 @@
       '</div>';
     html += '<div class="la-input-row">' +
       '<div class="la-input-label">'+ICON.wallet+' סכום ההלוואה<span class="la-input-value">'+money(safeAmount)+'</span></div>' +
-      '<input class="la-num-input" type="number" data-bind="amount" placeholder="הזינו סכום, למשל 18000" value="'+esc(loan.amount)+'" />' +
+      '<input class="la-num-input" type="text" inputmode="numeric" data-bind="amount" placeholder="הזינו סכום, למשל 18000" value="'+esc(loan.amount)+'" />' +
       '<input type="range" data-bind="amount" min="500" max="500000" step="500" value="'+safeAmount+'" />' +
       '</div>';
     html += '<div class="la-input-row">' +
       '<div class="la-input-label">'+ICON.percent+' ריבית שנתית<span class="la-input-value">'+safeRate+'%</span></div>' +
-      '<input class="la-num-input" type="number" step="0.01" data-bind="rate" placeholder="הזינו ריבית, למשל 4.3" value="'+esc(loan.rate)+'" />' +
+      '<input class="la-num-input" type="text" inputmode="decimal" data-bind="rate" placeholder="הזינו ריבית, למשל 4.3" value="'+esc(loan.rate)+'" />' +
       '<input type="range" data-bind="rate" min="0" max="25" step="0.1" value="'+safeRate+'" />' +
       '</div>';
     html += '<div class="la-input-row">' +
       '<div class="la-input-label">'+ICON.calendar+' תקופה בחודשים<span class="la-input-value">'+safeTerm+' חודשים</span></div>' +
-      '<input class="la-num-input" type="number" data-bind="term" placeholder="הזינו תקופה, למשל 29" value="'+esc(loan.term)+'" />' +
+      '<input class="la-num-input" type="text" inputmode="numeric" data-bind="term" placeholder="הזינו תקופה, למשל 29" value="'+esc(loan.term)+'" />' +
       '<input type="range" data-bind="term" min="1" max="360" step="1" value="'+safeTerm+'" />' +
       '</div>';
     if (state.loans.length > 1) {
@@ -547,7 +548,7 @@
           '<div class="la-detail-cell"><div class="la-detail-label">ריבית</div><div class="la-detail-val" style="color:#F5A524">'+money(r.interest)+'</div></div>' +
           '</div>';
         html += '<div class="la-extra-label">תשלום נוסף בחודש זה</div>';
-        html += '<input class="la-num-input" type="number" placeholder="לדוגמה: 500" data-draft-amount value="'+esc(state.draftAmount)+'" />';
+        html += '<input class="la-num-input" type="text" inputmode="numeric" placeholder="לדוגמה: 500" data-draft-amount value="'+esc(state.draftAmount)+'" />';
         html += '<div class="la-option-row">' +
           '<div class="la-option-chip'+(state.draftOption===1?" active":"")+'" data-action="set-option" data-option="1">'+ICON.scissors+' קיצור תקופה</div>' +
           '<div class="la-option-chip'+(state.draftOption===2?" active":"")+'" data-action="set-option" data-option="2">'+ICON.down+' הקטנת תשלום</div>' +
@@ -677,13 +678,32 @@
 
   root.addEventListener('input', function(e){
     var bind = e.target.getAttribute('data-bind');
-    if (bind) {
+    if (bind && e.target.type === 'text') {
+      var allowDecimal = (bind === 'rate');
+      var raw = e.target.value;
+      var cursor = e.target.selectionStart;
+      var cleaned = allowDecimal ? raw.replace(/[^\d.]/g, '') : raw.replace(/\D/g, '');
+      if (allowDecimal) {
+        var firstDot = cleaned.indexOf('.');
+        if (firstDot !== -1) cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+      }
+      var removedLen = raw.length - cleaned.length;
+      state.loans[state.currentIndex][bind] = cleaned;
+      state.visibleCount = 12;
+      saveState();
+      render();
+      var again = root.querySelector('[data-bind="'+bind+'"][type="text"]');
+      if (again) {
+        again.focus();
+        var newPos = Math.max(0, Math.min(cleaned.length, cursor - removedLen));
+        try { again.setSelectionRange(newPos, newPos); } catch(err) {}
+      }
+    } else if (bind) {
+      // range slider
       state.loans[state.currentIndex][bind] = e.target.value;
       state.visibleCount = 12;
       saveState();
       render();
-      var again = root.querySelector('[data-bind="'+bind+'"][type="'+e.target.type+'"]');
-      if (again && e.target.type === 'number') { again.focus(); }
     }
   });
 
