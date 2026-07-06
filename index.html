@@ -621,6 +621,7 @@
   root.addEventListener('click', function(e){
     var actionEl = e.target.closest('[data-action]');
     if (!actionEl) return;
+    clearTimeout(renderTimer);
     var action = actionEl.getAttribute('data-action');
     var loan = state.loans[state.currentIndex];
 
@@ -676,9 +677,13 @@
     }
   });
 
+  var renderTimer = null;
+
   root.addEventListener('input', function(e){
     var bind = e.target.getAttribute('data-bind');
-    if (bind && e.target.type === 'text') {
+    if (!bind) return;
+
+    if (e.target.type === 'text') {
       var allowDecimal = (bind === 'rate');
       var raw = e.target.value;
       var cursor = e.target.selectionStart;
@@ -687,19 +692,32 @@
         var firstDot = cleaned.indexOf('.');
         if (firstDot !== -1) cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
       }
-      var removedLen = raw.length - cleaned.length;
+      // fix up the value in place, without touching/recreating the DOM node
+      if (cleaned !== raw) {
+        var newPos = Math.max(0, cursor - (raw.length - cleaned.length));
+        e.target.value = cleaned;
+        try { e.target.setSelectionRange(newPos, newPos); } catch(err) {}
+      }
       state.loans[state.currentIndex][bind] = cleaned;
       state.visibleCount = 12;
       saveState();
-      render();
-      var again = root.querySelector('[data-bind="'+bind+'"][type="text"]');
-      if (again) {
-        again.focus();
-        var newPos = Math.max(0, Math.min(cleaned.length, cursor - removedLen));
-        try { again.setSelectionRange(newPos, newPos); } catch(err) {}
-      }
-    } else if (bind) {
-      // range slider
+
+      // defer the full re-render until typing pauses, so the focused
+      // input is never destroyed/recreated mid-keystroke (this is what
+      // caused digits to reverse on mobile keyboards)
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(function(){
+        render();
+        var again = root.querySelector('[data-bind="'+bind+'"][type="text"]');
+        if (again) {
+          again.focus();
+          var len = again.value.length;
+          try { again.setSelectionRange(len, len); } catch(err) {}
+        }
+      }, 400);
+    } else {
+      // range slider: no cursor to preserve, safe to update live
+      clearTimeout(renderTimer);
       state.loans[state.currentIndex][bind] = e.target.value;
       state.visibleCount = 12;
       saveState();
